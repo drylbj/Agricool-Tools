@@ -14,17 +14,84 @@ export default function Auth() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
+
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
   const navigate = useNavigate();
   const { loginAs } = useAuth();
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    setShowRoleModal(true);
+    setError("");
+
+    if (tab === "register") {
+      if (password !== confirmPassword) {
+        setError("Passwords do not match.");
+        return;
+      }
+      setShowRoleModal(true);
+    } else {
+      setLoading(true);
+      try {
+        const response = await fetch("http://localhost:5000/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone, password }),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          setError(data.message || "Login failed.");
+          setLoading(false);
+          return;
+        }
+
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("user", JSON.stringify(data.user));
+
+        loginAs(data.user.role);
+        navigate(data.user.role === "admin" ? "/admin" : "/farmer");
+      } catch (err) {
+        console.error(err);
+        setError("Could not connect to server.");
+      } finally {
+        setLoading(false);
+      }
+    }
   };
 
-  const handleRoleSelect = (role: Role) => {
-    loginAs(role);
-    navigate(role === "admin" ? "/admin" : "/farmer");
+  const handleRoleSelect = async (role: Role) => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("http://localhost:5000/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, phone, password, role }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.message || "Registration failed.");
+        setLoading(false);
+        setShowRoleModal(false);
+        return;
+      }
+
+      setShowRoleModal(false);
+      setTab("login");
+      setError("Registration successful. Please log in.");
+    } catch (err) {
+      console.error(err);
+      setError("Could not connect to server.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -38,6 +105,7 @@ export default function Auth() {
         </div>
         <p className="brand-panel-name">AgriCool-Tools</p>
       </div>
+
       <div className="auth-panel">
         <form className="auth-content" onSubmit={handleSubmit}>
           <p className="mini-brand">AgriCool-Tools</p>
@@ -47,6 +115,9 @@ export default function Auth() {
               ? "Welcome back. Let's get growing"
               : "Join and start managing your farm smarter."}
           </p>
+
+          {error && <p className="auth-error">{error}</p>}
+
           <div className="auth-tabs">
             <button
               type="button"
@@ -69,7 +140,12 @@ export default function Auth() {
               Full name
               <div className="input-with-icon">
                 <User size={19} />
-                <input placeholder="Saint John Tuquero" />
+                <input
+                  placeholder="Saint John Tuquero"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
               </div>
             </label>
           )}
@@ -78,7 +154,13 @@ export default function Auth() {
             Phone number
             <div className="input-with-icon">
               <Phone size={19} />
-              <input type="tel" placeholder="09XX XXX XXXX" />
+              <input
+                type="tel"
+                placeholder="09XX XXX XXXX"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                required
+              />
             </div>
           </label>
 
@@ -90,6 +172,9 @@ export default function Auth() {
               <input
                 type={showPassword ? "text" : "password"}
                 placeholder="••••••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
               />
               <button
                 type="button"
@@ -110,6 +195,9 @@ export default function Auth() {
                 <input
                   type={showConfirm ? "text" : "password"}
                   placeholder="••••••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
                 />
                 <button
                   type="button"
@@ -134,8 +222,9 @@ export default function Auth() {
             </label>
           )}
 
-          <button className="submit-button" type="submit">
-            {tab === "login" ? "Log in" : "Create Account"} <span>→</span>
+          <button className="submit-button" type="submit" disabled={loading}>
+            {loading ? "Please wait..." : tab === "login" ? "Log in" : "Create Account"}
+            <span>→</span>
           </button>
 
           <div className="continue-divider">
@@ -143,7 +232,7 @@ export default function Auth() {
           </div>
           <div className="social-row">
             <button type="button">G&nbsp; Google</button>
-            <button type="button">◎&nbsp; Facebook</button>
+            <button type="button">@&nbsp; Facebook</button>
           </div>
         </form>
       </div>
